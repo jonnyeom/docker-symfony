@@ -1,52 +1,31 @@
-FROM alpine:3.15
+FROM php:7.4-fpm-alpine
 
-LABEL maintainer="Vincent Composieux <vincent.composieux@gmail.com>"
+LABEL maintainer="Jonathan Eom <jeom@unleashed-technologies.com>"
 
 RUN apk add --no-cache \
     coreutils \
     gettext \
-    php8-fpm \
-    php8-ctype \
-    php8-curl \
-    php8-dom \
-    php8-gd \
-    php8-iconv \
-    php8-json \
-    php8-intl \
-    php8-fileinfo\
-    php8-mbstring \
-    php8-opcache \
-    php8-openssl \
-    php8-pdo \
-    php8-pdo_mysql \
-    php8-mysqli \
-    php8-xml \
-    php8-xsl \
-    php8-zlib \
-    php8-phar \
-    php8-tokenizer \
-    php8-session \
-    php8-simplexml \
-    php8-zip \
-    php8-xmlwriter \
-    php8-sodium \
-    php8-pecl-apcu \
     make \
     curl
 
-# Enable php8-xdebug if $PHP_XDEBUG_MODE is not empty
+# Enable xdebug if $PHP_XDEBUG_MODE is not empty
 ARG PHP_XDEBUG_MODE=off
 ARG PHP_XDEBUG_CLIENT_PORT=5902
 ARG PHP_XDEBUG_CLIENT_HOST=host.docker.internal
-COPY xdebug.ini  /etc/php8/conf.d/xdebug.ini.template
+COPY xdebug.ini  "$PHP_INI_DIR/xdebug.ini.template"
 RUN if [[ "$PHP_XDEBUG_MODE" != "" ]]; then \
-        apk add --no-cache php8-pecl-xdebug; \
+        apk add --no-cache php7-pecl-xdebug; \
         export PHP_XDEBUG_MODE=$PHP_XDEBUG_MODE; \
         export PHP_XDEBUG_CLIENT_PORT=$PHP_XDEBUG_CLIENT_PORT; \
         export PHP_XDEBUG_CLIENT_HOST=$PHP_XDEBUG_CLIENT_HOST; \
-        envsubst < /etc/php8/conf.d/xdebug.ini.template > /etc/php8/conf.d/xdebug.ini; \
+        envsubst < "$PHP_INI_DIR/xdebug.ini.template" > "$PHP_INI_DIR/xdebug.ini"; \
     fi
-RUN rm -f /etc/php8/conf.d/xdebug.ini.template
+RUN rm -f "$PHP_INI_DIR/xdebug.ini.template"
+
+ADD https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+
+RUN chmod +x /usr/local/bin/install-php-extensions && \
+    install-php-extensions gd intl zip pdo_mysql
 
 RUN curl -sS https://getcomposer.org/installer | tee composer-setup.php \
     && php8 composer-setup.php && rm composer-setup.php* \
@@ -63,13 +42,12 @@ RUN wget https://github.com/symfony/cli/releases/download/v$SYMFONY_CLI_VERSION/
 RUN apk add --update nodejs npm \
     && npm install --global yarn
 
-COPY symfony.ini /etc/php8/conf.d/
-COPY symfony.ini /etc/php8/cli/conf.d/
-
-COPY symfony.pool.conf /etc/php8/php-fpm.d/
+COPY symfony.ini "$PHP_INI_DIR/"
+COPY symfony.ini /usr/local/etc/php/cli/conf.d/
+COPY symfony.pool.conf /usr/local/etc/php-fpm.d/
 
 WORKDIR /var/www/symfony
 
-CMD ["php-fpm8", "-F"]
+CMD ["php-fpm", "-F"]
 
 EXPOSE 9001
